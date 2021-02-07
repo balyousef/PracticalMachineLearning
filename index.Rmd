@@ -1,0 +1,96 @@
+---
+title: "PracticalMachineLearning_Project"
+author: "Basem Alyousef"
+date: "1/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading the needed packages
+```{r}
+library(caret); library(randomForest); library(rpart.plot)
+```
+
+## Setting seed, Loading and Exploring our data
+```{r}
+set.seed(500)
+
+pml_training <- read.csv("pml-training.csv",na.strings=c("NA","","#DIV/0!"))
+pml_testing  <- read.csv("pml-testing.csv",na.strings=c("NA","","#DIV/0!"))
+
+pml_training$classe <- as.factor(pml_training$classe)
+
+dim(pml_training); dim(pml_testing)
+```
+
+## Cleaning data
+After going through the list of columns in our data, we can deifinetly say that some of the columns are irrelevant and need to be rmoved from the data sets before we start our analysis and training.  This is done in two steps.  First, excluding columns we know they are not relevant from the column names. Second, exclude columns wich have few unique values:
+```{r}
+#removing irrelevant columns: 
+#X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp
+trainingSet <- pml_training[,-grep("X|user_name|raw_timestamp_part_1|raw_timestamp_part_2|cvtd_timestamp",names(pml_training))]
+
+testingSet <- pml_testing[,-grep("X|user_name|raw_timestamp_part_1|raw_timestamp_part_2|cvtd_timestamp",names(pml_testing))]
+
+#removing predictors with very few unique values 
+trainingSet<-trainingSet[,colSums(is.na(trainingSet)) == 0]
+testingSet<-testingSet[,colSums(is.na(testingSet)) == 0]
+
+dim(trainingSet); dim(testingSet)
+```
+We reduced the number of columns from 160 to 55.
+
+## Training set partition
+I will partition the training set into 75% for training and 25% for testing
+```{r}
+partition <- createDataPartition(y = trainingSet$classe, list = FALSE, p=0.75)
+trainingSet_train <- trainingSet[partition,]
+trainingSet_test <- trainingSet[-partition,]
+```
+
+## Model 1: Random Forest 
+```{r}
+#Training
+RF_model <- randomForest(classe ~., data=trainingSet_train, na.action = na.exclude)
+
+#Plot
+plot(RF_model)
+
+#Predicting
+RF_predict <- predict(RF_model, trainingSet_test)
+
+## Use a confusion matrix to get the insample error
+RF_conf_matrix<-confusionMatrix(RF_predict,trainingSet_test$classe)
+RF_conf_matrix
+
+plot(RF_conf_matrix$table, main = "Random Forest Confusion Matrix")
+```
+
+## Model 2: Decision Tree 
+```{r}
+#Training
+DT_model <- rpart(classe ~ ., trainingSet_train, method = "class")
+
+#Normal plot
+rpart.plot(DT_model)
+
+#Prediciting
+DT_predict <- predict(DT_model, trainingSet_test, type= "class")
+
+## Use a confusion matrix to get the insample error
+DT_conf_matrix<-confusionMatrix(DT_predict, trainingSet_test$classe)
+DT_conf_matrix
+
+plot(DT_conf_matrix$table, main ="Decision Tree Confusion Matrix")
+```
+
+## Final Prediction
+Comparing the accuracy from random forest (0.9969) with the one from decision tree (0.7418), we decide to use random forest with the testing set as it gives better prediction 
+```{r}
+FinalPrediction <- predict(RF_model, testingSet, type="class")
+FinalPrediction
+```
+
